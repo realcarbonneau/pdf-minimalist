@@ -258,10 +258,15 @@ formulas + others), add camera-photo PDFs (DocShadow subset, SmartDoc),
 DIBCO quantitative tests, structural classes (PDF/A, JBIG2-done, OCR text),
 processing ladder, automatic "B&W not recommended" recommendation.
 
-## 39 — OPEN (full detail)
-Designer: migrate + sync to GitHub repo pdf-minimalist (SSH already working
-as realcarbonneau — verified); placeholder README may be fully replaced, but
-verify the correct repo first. Verified: realcarbonneau/pdf-minimalist, one
-commit, single README stub ("# pdf-squash").
+## 39 — DONE
+~~I called my github repo, pdf-minimalist, I should already have ssh to github
+working locally, can you migrate and sync to github? There is only a
+placeholder readme there, everything can be replaced, but double check to make
+sure you have the correct repo.~~
+Stub: verified SSH as realcarbonneau + remote (one commit, single "# pdf-squash"
+stub) before touching anything; `git init/add/commit`, 81 files, pushed with
+--force replacing the stub (authorized). Working tree clean, tracking
+origin/main. Note: local package still named pdf_reducer (no rename ruled).
+See: https://github.com/realcarbonneau/pdf-minimalist (commit 78544a0).
 Remaining queue (not yet ruled on): JBIG2 wiring, software
 documentation example.
