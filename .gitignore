@@ -1,0 +1,9 @@
+.venv/
+.tmp/
+__pycache__/
+*.pyc
+*.pyo
+output/
+tmp/
+*.reduced.pdf
+.pytest_cache/
