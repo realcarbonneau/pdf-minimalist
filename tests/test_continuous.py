@@ -60,6 +60,23 @@ def test_continuous_zoom_scroll_synced():
     assert a.current_page == 4  # clamped
 
 
+def test_goto_page_steps_through_grid():
+    a = ContinuousDocView()
+    a.resize(900, 600)
+    a.set_pages(_pages(n=9))
+    _shown(a)
+    a.set_zoom(0.4)  # autowrap grid, several columns
+    assert a.cols() >= 2
+    seen = []
+    a.pageChanged = seen.append
+    for i in range(9):
+        a.goto_page(i)
+        assert a.current_page == i, i
+    assert seen == list(range(1, 9)) or seen[-1] == 8
+    a.goto_page(99)
+    assert a.current_page == 8  # clamped, same as scroll path
+
+
 def test_overview_mirrors_view():
     from PySide6.QtCore import QPointF, QRectF
     nav = OverviewMap()

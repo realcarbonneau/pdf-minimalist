@@ -38,11 +38,19 @@ def test_background_job_fills_minis_and_preview(tmp_path):
     assert w.before.page_count == 3
     _wait_job(w)
     assert w.after.page_count == 3  # preview applied without freezing
-    assert w.filters.count() == 7  # passthrough/Original has no mini (§30)
-    for i in range(7):
+    assert w.filters.count() == 8  # passthrough/Original has no mini (§30)
+    for i in range(8):
         assert not w.filters.item(i).icon().isNull(), i
-    assert len(w._mini_est) == 7
-    assert all(v.startswith("est.") for v in w._mini_est.values())
+    assert len(w._mini_est) == 8
+    # every filter must hold a real reframed composite, not a placeholder:
+    # placeholders pass icon checks and hid the JPX mini crash (§56 wiring).
+    assert set(w._mini_view) == set(w._strip_ids)
+    for pid, arr in w._mini_view.items():
+        assert arr.ndim == 3 and arr.shape[2] == 3, pid
+    # §§55/59: all captions are real post-save amounts — no "est." anywhere.
+    for pid, v in w._mini_est.items():
+        assert any(u in v for u in ("B", "KB", "MB")), (pid, v)
+        assert not v.startswith("est."), (pid, v)
 
 
 def test_pure_job_helpers():

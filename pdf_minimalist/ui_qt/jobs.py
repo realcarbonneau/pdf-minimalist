@@ -23,10 +23,12 @@ import numpy as np
 from PIL import Image as PILImage
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QImage
+import logging
 
 from ..core import presets
-from ..core.pipeline import bw_page_png
 from ..core.cancel import CancelToken
+
+log = logging.getLogger("pdf_minimalist")
 
 PREVIEW_DPI = 150
 MINI_W = 160
@@ -116,7 +118,7 @@ def to_mini(arr: np.ndarray) -> np.ndarray:
 
 
 def mini_for_preset(gray_mini: np.ndarray, pid: str) -> np.ndarray:
-    """Viewport mini for one preset (0/255 gray or RGB). Pure function."""
+    """Exact-view mini source for one preset (0/255 gray or RGB). Pure function."""
     p = presets.get(pid)
     if p["mode"] == "bw":
         from ..core import threshold as T
@@ -125,24 +127,69 @@ def mini_for_preset(gray_mini: np.ndarray, pid: str) -> np.ndarray:
               "adaptive": T.adaptive_mean, "sauvola": T.sauvola}[s]
         return fn(gray_mini)
     rgb = np.stack([gray_mini] * 3, axis=-1) if gray_mini.ndim == 2 else gray_mini
+    if p["mode"] == "jpx":
+        return presets.apply_jpx_preview(rgb, pid)
     return presets.apply_color_preview(rgb, pid)
 
 
 def estimate_bytes(path: str, page: int, pid: str, dpi: int) -> int:
-    """Real-encoder output size for one preset (own fitz handle; thread-safe)."""
+    """Real save-payload size for one BW preset page (§55: measured).
+
+    BW runs the exact encoder the saver embeds (validated JBIG2, else the
+    PNG fallback). Color presets use per-document totals instead
+    (`color_doc_total`); this stays for BW pages only.
+    """
+    from ..core.pipeline import bw_page_payload
     p = presets.get(pid)
-    if p["mode"] == "bw":
-        gray = render_gray(path, page, dpi)
-        return len(bw_page_png(gray, p["params"]["strategy"], p["params"]["t"]))
-    rgb = render_rgb(path, page, p["params"]["dpi_cap"])
-    buf = io.BytesIO()
-    PILImage.fromarray(rgb).save(buf, "JPEG", quality=p["params"]["jpeg_q"], optimize=True)
-    return len(buf.getvalue())
+    gray = render_gray(path, page, dpi)
+    payload, _codec = bw_page_payload(gray, p["params"]["strategy"], p["params"]["t"])
+    return len(payload)
+
+
+def color_doc_total(path: str, pid: str) -> int:
+    """Real post-save image-payload total for one color preset (§59).
+
+    Replays the saver's exact per-image decision (`color_stream_plan`,
+    doc-wide dedupe included) and sums final stream bytes — winners and
+    kept originals alike. Runs in a pool process (must stay picklable).
+    """
+    import fitz
+    from ..core.pipeline import color_stream_plan
+    p = presets.get(pid)
+    prm = p["params"]
+    codec = "jpx" if p["mode"] == "jpx" else "jpeg"
+    total = 0
+    doc = _open(path)
+    try:
+        done: set[int] = set()
+        for pno in range(doc.page_count):
+            entries = doc[pno].get_images(full=True)
+            masks = {e[1] for e in entries if e[1]}
+            for e in entries:
+                xref = e[0]
+                if xref in done or xref in masks:
+                    continue
+                done.add(xref)
+                try:
+                    info = doc.extract_image(xref)
+                except Exception:
+                    continue
+                plan = color_stream_plan(
+                    info["image"], info["width"], info["height"],
+                    info.get("bpc"), prm["dpi_cap"],
+                    prm.get("jpeg_q", 45), codec, prm.get("rate", 24))
+                total += len(plan[0]) if plan else len(info["image"])
+    finally:
+        doc.close()
+    return total
 
 
 def preview_page(path: str, page: int, spec: dict) -> np.ndarray:
     """Full preview render for one page under the active spec (own handle)."""
     from ..core import threshold as T
+    if spec["mode"] == "jpx":
+        rgb = render_rgb(path, page, PREVIEW_DPI)
+        return presets.apply_jpx_preview(rgb, spec["preset_id"])
     if spec["mode"] == "color":
         rgb = render_rgb(path, page, PREVIEW_DPI)
         return presets.apply_color_preview(rgb, spec["preset_id"])
@@ -173,7 +220,10 @@ def mini_page_task(path: str, page: int, pid: str) -> np.ndarray:
         rgb = np.stack([out] * 3, axis=-1)
     else:
         rgb = render_rgb(path, page, MINI_PAGE_DPI)
-        rgb = presets.apply_color_preview(rgb, pid)
+        if p["mode"] == "jpx":
+            rgb = presets.apply_jpx_preview(rgb, pid)
+        else:
+            rgb = presets.apply_color_preview(rgb, pid)
         rgb = np.asarray(rgb)
     img = PILImage.fromarray(rgb)
     w, h = img.size
@@ -237,18 +287,20 @@ class FilterWorker(QThread):
 
     Phase 1 — full preview pages for the active filter (§51: the right pane
     updates first). Phase 2 — mini-pages for exact-view compositing.
-    Phase 3 — est. sizes. Scrolling, panning, zooming and
+    Phase 3 — real post-save amounts: BW per page, color per document (§59).
+    Scrolling, panning, zooming and
     page changes never dispatch: the GUI reframes minis from these caches.
 
     Signals carry the dispatch generation; the GUI applies only the latest.
     """
     mini_done = Signal(str, int, object, int)  # pid, page, mini-page array, generation
-    est_done = Signal(str, int, int, int)      # pid, page, raw byte count, generation
+    est_done = Signal(str, int, int, int)  # pid, page (-1 = whole doc), bytes, generation
     preview_done = Signal(object, int)     # [arrays...], generation
     progressed = Signal(int, int, int)     # done, total, generation
 
     def __init__(self, path, preset_ids, spec, token, generation, n_pages: int,
-                   need_mini=None, need_est=None, need_preview=True):
+                   need_mini=None, need_est_pages=None, need_est_doc=None,
+                   need_preview=True):
         super().__init__()
         self.path = path
         self.preset_ids = list(preset_ids)
@@ -257,9 +309,11 @@ class FilterWorker(QThread):
         self.generation = generation
         self.n_pages = int(n_pages)
         # §44 process-once: only compute what the GUI cache is missing.
-        # need_mini/need_est map pid -> sorted list of missing page indices.
+        # need_mini/need_est_pages map pid -> sorted missing page indices;
+        # need_est_doc lists color pids missing their document total.
         self.need_mini = {pid: sorted(v) for pid, v in dict(need_mini or {}).items()}
-        self.need_est = {pid: sorted(v) for pid, v in dict(need_est or {}).items()}
+        self.need_est_pages = {pid: sorted(v) for pid, v in dict(need_est_pages or {}).items()}
+        self.need_est_doc = list(need_est_doc or [])
         self.need_preview = bool(need_preview)
 
     @staticmethod
@@ -282,7 +336,8 @@ class FilterWorker(QThread):
         dpi = self.spec.get("dpi", 300)
         n_pages = self.n_pages
         mini_tasks = sum(len(v) for v in self.need_mini.values())
-        est_tasks = sum(len(v) for v in self.need_est.values())
+        est_page_tasks = sum(len(v) for v in self.need_est_pages.values())
+        est_tasks = est_page_tasks + len(self.need_est_doc)
         total = mini_tasks + est_tasks + (n_pages if self.need_preview else 0)
         done = 0
         # Phase 1 — full preview pages for the ACTIVE filter first (§51): the
@@ -297,12 +352,18 @@ class FilterWorker(QThread):
                     return
                 try:
                     pages[futs[fut]] = fut.result()
-                except Exception:
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    # §14 run-and-review: background failures must surface in
+                    # stdout, never stall the bars silently.
+                    log.warning("job gen=%d preview page %s failed: %s",
+                                self.generation, futs[fut], e)
                 done += 1
                 self.progressed.emit(done, total, self.generation)
             if len(pages) == n_pages:
                 self.preview_done.emit([pages[i] for i in sorted(pages)], self.generation)
+            elif self._alive():
+                log.warning("job gen=%d preview incomplete (%d/%d pages)",
+                            self.generation, len(pages), n_pages)
         # Phase 2 — mini-pages for exact-view compositing (§48).
         if self._alive() and mini_tasks:
             futs = {ex.submit(mini_page_task, self.path, i, pid): (pid, i)
@@ -313,21 +374,27 @@ class FilterWorker(QThread):
                 pid, i = futs[fut]
                 try:
                     self.mini_done.emit(pid, i, fut.result(), self.generation)
-                except Exception:
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    log.warning("job gen=%d mini %s p%d failed: %s",
+                                self.generation, pid, i + 1, e)
                 done += 1
                 self.progressed.emit(done, total, self.generation)
-        # Phase 3 — est. sizes for every preset and page.
+        # Phase 3 — real post-save amounts (§§55/59): BW per page (the exact
+        # encoder bytes), color per document (the saver's exact per-image
+        # decision summed with doc-wide dedupe).
         if self._alive() and est_tasks:
             futs = {ex.submit(estimate_bytes, self.path, i, pid, dpi): (pid, i)
-                    for pid, idxs in self.need_est.items() for i in idxs}
+                    for pid, idxs in self.need_est_pages.items() for i in idxs}
+            futs.update({ex.submit(color_doc_total, self.path, pid): (pid, -1)
+                         for pid in self.need_est_doc})
             for fut in cf.as_completed(futs):
                 if not self._alive():
                     return
                 pid, i = futs[fut]
                 try:
                     self.est_done.emit(pid, i, int(fut.result()), self.generation)
-                except Exception:
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    log.warning("job gen=%d est %s p%s failed: %s",
+                                self.generation, pid, i + 1, e)
                 done += 1
                 self.progressed.emit(done, total, self.generation)

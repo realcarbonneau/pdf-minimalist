@@ -223,8 +223,10 @@ class ContinuousDocView(QGraphicsView):
             return
         i = max(0, min(len(self._items) - 1, i))
         changed = (i != self._current)
-        stride = self._page_h() + self.GAP
-        self.verticalScrollBar().setValue(int((i // self.cols()) * stride * self._zoom))
+        # Scroll the target item's actual scene position to the top: exact
+        # for any grid shape or mixed page sizes. Same-row targets need no
+        # scroll (already visible) but still become current.
+        self.verticalScrollBar().setValue(int(self._items[i].pos().y() * self._zoom))
         self._current = i
         if changed and self.pageChanged is not None:
             self.pageChanged(i)

@@ -43,13 +43,18 @@ View=Main:V + Filters:V (square / portrait screens) → panes stacked, rail on r
 | # | Preset (label) | Mode | Params | Use when |
 |---|---|---|---|---|
 | 0 | Original (no-op) | — | gc+deflate only | baseline / born-digital keep |
-| 1 | BW · Otsu Auto ★ default | BW | 300dpi, otsu, JBIG2→G4 | most scans |
+| 1 | BW · Otsu Auto ★ default | BW | 300dpi, otsu, JBIG2 | most scans |
 | 2 | BW · Clean T=180 | BW | 300dpi, simple T=180 | clean laser prints |
 | 3 | BW · Strong T=210 | BW | 300dpi, simple T=210 | faint pencil / gray bg |
 | 4 | BW · Stained Paper | BW | 300dpi, sauvola w31 k0.25 | yellowed / uneven light |
-| 5 | BW · Fast Draft | BW | 200dpi, otsu, G4 only | old hardware, quick pass |
-| 6 | Color · Max Squeeze | color | 150dpi, JPEG q45 4:2:0 | smallest slides/photos |
-| 7 | Color · Balanced | color | 200dpi, JPEG q60 | readable photos, fewer blocks |
+| 5 | BW · Fast Draft | BW | 200dpi, otsu, JBIG2 | old hardware, quick pass |
+| 6 | Color · JPEG2000 ★ default color | JPX | 150dpi, rate 24 | smallest photos, slower |
+| 7 | Color · Max Squeeze | JPEG | 150dpi, q45 4:2:0 | smallest slides/photos |
+| 8 | Color · Balanced | JPEG | 200dpi, q60 | readable photos, fewer blocks |
+
+Few-color images (designer ruling §57: ≤256 distinct colors — logos,
+diagrams, flat screenshots) take a lossless palette-quantized Flate version
+whenever it beats the codec re-encode, in every color preset.
 
 Defined in code: `pdf_minimalist/core/presets.py` → `PRESETS` (id, label, mode, params).
 Thumbnails render lazily at ~96px on page change (debounced 150ms, cancellable);
@@ -71,13 +76,12 @@ main preview re-renders at 150dpi on preset click (300dpi at Save).
 - PgUp/PgDn jump to prev/next page top; click a filter mini still switches
   the right pane's filter (radio-behavior); minis render the current
   (top-visible) page.
-- Sizes under minis (designer ruling §32, honesty §53): each strip mini
-  carries its filter recipe (threshold strategy, DPI, encoder — `§53`) and
-  the FULL-document payload estimate (`est 41KB`): every page encoded with
-  the real save settings (BW threshold at save DPI, color JPEG at preset
-  quality) and summed. It stays an estimate — PDF container and gc/deflate
-  overhead are unknowable until Save — and the exact output size with the
-  saving is reported after every save.
+- Sizes under minis (designer ruling §32, real amounts §§55/59): each strip
+  mini carries its filter recipe (threshold strategy, DPI, encoder — `§53`)
+  and the FULL-document real amount with the exact save bytes — BW sums the
+  embedded page payloads, color sums the exact per-image save decisions
+  (doc-wide dedupe included). No estimates anywhere; PDF container/gc
+  overhead is reported with the exact output size after every save.
 - Navigator dropped (designer ruling §50): the separate OverviewMap navigator
   is gone — the original (left) window is the navigator. The right panel keeps
   preset, strategy, threshold, DPI, page-size, force-raster, page buttons,

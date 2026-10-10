@@ -69,13 +69,13 @@ def _preset_algo(pid: str) -> str:
     p = presets.get(pid)
     prm = p["params"]
     if p["mode"] == "bw":
-        enc = {"jbig2-g4": "JBIG2", "g4": "G4"}.get(prm.get("encoder", ""), "")
         base = f"{prm['strategy']} T{prm['t']}" if prm["strategy"] == "simple" \
             else prm["strategy"]
-        return f"{base} · {prm['dpi']}dpi · {enc}" if enc else \
-            f"{base} · {prm['dpi']}dpi"
+        return f"{base} · {prm['dpi']}dpi · JBIG2"
     if p["mode"] == "color":
         return f"JPEG q{prm['jpeg_q']} · ≤{prm['dpi_cap']}dpi"
+    if p["mode"] == "jpx":
+        return f"JPEG2000 r{prm.get('rate', 24)} · ≤{prm['dpi_cap']}dpi"
     return "as-is"
 
 
@@ -99,6 +99,9 @@ class Worker(QThread):
             elif spec["mode"] == "color":
                 recompress_file(in_path, out_path, spec["dpi_cap"], spec["jpeg_q"], token,
                                 progress=cb)
+            elif spec["mode"] == "jpx":
+                recompress_file(in_path, out_path, spec["dpi_cap"], token=token,
+                                progress=cb, codec="jpx", rate=spec["rate"])
             else:
                 gc_copy(in_path, out_path)
             if token.cancelled:
@@ -133,7 +136,8 @@ class MainWindow(QMainWindow):
         self._jobs: set = set()  # in-flight workers: dropping the last ref while
         self._job_token = CancelToken()  # a QThread still runs aborts (Qt fatal)
         self._mini_pages: dict = {}  # (file_key, pid) -> [mini-page array|None] (§48)
-        self._est_bytes: dict = {}  # (file_key, pid, dpi) -> [int|None] (§48/§53)
+        self._est_bytes: dict = {}  # (file_key, pid, dpi) -> [int|None], BW pages (§55)
+        self._est_doc: dict = {}  # (file_key, pid) -> int doc total, color (§59)
         self._mini_view: dict = {}  # pid -> exact-view composite for today (§48)
         self._mini_est: dict = {}    # pid -> "est. X" for the top-visible page
         self._filter_prog: dict = {}  # pid -> 0.0..1.0 per-filter progress (§43)
@@ -315,20 +319,24 @@ class MainWindow(QMainWindow):
             return
         p = presets.get(pid)
         if p["mode"] == "bw":
-            enc = {"jbig2-g4": "JBIG2→G4", "g4": "G4"}.get(
-                p["params"].get("encoder", ""), "")
             lines = [
                 f"Threshold: {self.strategy.currentText()} "
                 f"T={self.slider.value()}",
                 f"Render: {self.dpi.currentData()} dpi · "
                 f"{presets.PAGE_SIZE_LABELS[self.page_size.currentData()]} · "
                 f"{'forced raster' if self.force_raster.isChecked() else 'text pass-through'}",
-                f"Encode: 1-bit PNG ({enc} planned)" if enc else "Encode: 1-bit PNG",
+                "Encode: JBIG2",
             ]
         elif p["mode"] == "color":
             prm = p["params"]
             lines = [
                 f"Recompress: JPEG q={prm['jpeg_q']} · ≤{prm['dpi_cap']}dpi",
+                "Vectors and text preserved",
+            ]
+        elif p["mode"] == "jpx":
+            prm = p["params"]
+            lines = [
+                f"Recompress: JPEG2000 r={prm.get('rate', 24)} · ≤{prm['dpi_cap']}dpi",
                 "Vectors and text preserved",
             ]
         else:
@@ -455,6 +463,7 @@ class MainWindow(QMainWindow):
             self.path = path
             self._mini_pages.clear()
             self._est_bytes.clear()
+            self._est_doc.clear()
             self._mini_view.clear()
             self._mini_est.clear()
             self._filter_prog.clear()
@@ -589,19 +598,23 @@ class MainWindow(QMainWindow):
                     missing = list(range(n))
                 if missing:
                     need_mini[pid] = missing
-        need_est = {}
+        need_est_pages = {}
+        need_est_doc = []
         for pid in self._strip_ids:
-            counts = self._est_bytes.get((fkey, pid, dpi))
-            if counts is None:
-                need_est[pid] = list(range(n))
-            else:
-                missing = [i for i, t in enumerate(counts) if t is None]
-                if len(counts) != n:
-                    missing = list(range(n))
-                if missing:
-                    need_est[pid] = missing
+            if presets.get(pid)["mode"] == "bw":
+                counts = self._est_bytes.get((fkey, pid, dpi))
+                if counts is None:
+                    need_est_pages[pid] = list(range(n))
+                else:
+                    missing = [i for i, t in enumerate(counts) if t is None]
+                    if len(counts) != n:
+                        missing = list(range(n))
+                    if missing:
+                        need_est_pages[pid] = missing
+            elif (fkey, pid) not in self._est_doc:
+                need_est_doc.append(pid)
         need_preview = preview_key not in self._preview_cache
-        if not need_mini and not need_est and not need_preview:
+        if not need_mini and not need_est_pages and not need_est_doc and not need_preview:
             if self._job is not None:
                 self._job_token.cancel()
                 self._gen += 1
@@ -611,7 +624,10 @@ class MainWindow(QMainWindow):
 
         for pid in self._strip_ids:
             mt = len(need_mini.get(pid, ()))
-            et = len(need_est.get(pid, ()))
+            if presets.get(pid)["mode"] == "bw":
+                et = len(need_est_pages.get(pid, ()))
+            else:
+                et = 0 if (fkey, pid) in self._est_doc else 1
             self._expect[pid] = [0, mt, 0, et]
             if mt == 0 and et == 0:
                 self._filter_prog[pid] = 1.0
@@ -627,10 +643,12 @@ class MainWindow(QMainWindow):
         log.info("filter job gen=%d pages=%d preset=%s workers<=%d need_mini=%d need_est=%d need_preview=%s",
                  self._gen, n, spec["preset_id"], cpu_cap(),
                  sum(len(v) for v in need_mini.values()),
-                 sum(len(v) for v in need_est.values()), need_preview)
+                 sum(len(v) for v in need_est_pages.values()) + len(need_est_doc),
+                 need_preview)
         job = FilterWorker(self.path, self._strip_ids, spec,
                            self._job_token, self._gen, n,
-                           need_mini=need_mini, need_est=need_est,
+                           need_mini=need_mini, need_est_pages=need_est_pages,
+                           need_est_doc=need_est_doc,
                            need_preview=need_preview)
         # Remember what this generation computes (stale gens never write).
         job._fkey = fkey
@@ -676,15 +694,22 @@ class MainWindow(QMainWindow):
             return
         pages = self._mini_pages.get((fkey, pid))
         dpi = self.dpi.currentData()
-        # §53: full-document payload estimate — every page's real-encoder
-        # bytes summed. Still an estimate (container/gc overhead unknown
-        # until Save); the exact size is reported after saving.
-        counts = self._est_bytes.get((fkey, pid, dpi))
-        if counts is not None and len(counts) == self.doc.page_count and \
-                all(c is not None for c in counts):
-            total = f"est. {fmt_bytes(sum(counts))}"
-            if self._mini_est.get(pid) != total:
-                self._mini_est[pid] = total
+        # §§55/59: real post-save amounts, no estimates anywhere. BW sums the
+        # exact per-page payload bytes; color shows the exact per-image
+        # decision total. Container overhead is reported at Save instead.
+        if presets.get(pid)["mode"] == "bw":
+            counts = self._est_bytes.get((fkey, pid, dpi))
+            if counts is not None and len(counts) == self.doc.page_count and \
+                    all(c is not None for c in counts):
+                shown = fmt_bytes(sum(counts))
+            else:
+                shown = None
+        else:
+            total = self._est_doc.get((fkey, pid))
+            shown = fmt_bytes(total) if total is not None else None
+        if shown is not None:
+            if self._mini_est.get(pid) != shown:
+                self._mini_est[pid] = shown
         else:
             self._mini_est.pop(pid, None)
         if pages is not None and all(pg is not None for pg in pages):
@@ -781,24 +806,28 @@ class MainWindow(QMainWindow):
             exp[0] += 1
         self._reframe_one(pid)
 
-    def _jm_est(self, pid, page, nbytes, gen):
+    def _jm_est(self, pid, page, value, gen):
         if gen != self._gen:
             return
         job = self._job
         if job is None or getattr(job, "_fkey", None) != self._file_key():
             return
-        n = self.doc.page_count if self.doc else 0
-        key = (job._fkey, pid, getattr(job, "_est_dpi", None))
-        counts = self._est_bytes.get(key)
-        if counts is None or len(counts) != n:
-            counts = [None] * n
-            self._est_bytes[key] = counts
-        if 0 <= page < n:
-            counts[page] = int(nbytes)
+        if page < 0:
+            # Whole-document color total (§59).
+            self._est_doc[(job._fkey, pid)] = int(value)
+        else:
+            n = self.doc.page_count if self.doc else 0
+            key = (job._fkey, pid, getattr(job, "_est_dpi", None))
+            counts = self._est_bytes.get(key)
+            if counts is None or len(counts) != n:
+                counts = [None] * n
+                self._est_bytes[key] = counts
+            if 0 <= page < n:
+                counts[page] = int(value)
         exp = self._expect.get(pid)
         if exp is not None:
             exp[2] += 1
-        log.debug("job gen=%d %s p%d -> %dB", gen, pid, page + 1, nbytes)
+        log.debug("job gen=%d %s p%s -> %dB", gen, pid, page + 1, value)
         self._reframe_one(pid)
 
     def _jm_preview(self, pages, gen):
@@ -847,6 +876,8 @@ class MainWindow(QMainWindow):
                     "force_raster": self.force_raster.isChecked()}
         elif p["mode"] == "color":
             spec = {"mode": "color", "dpi_cap": p["params"]["dpi_cap"], "jpeg_q": p["params"]["jpeg_q"]}
+        elif p["mode"] == "jpx":
+            spec = {"mode": "jpx", "dpi_cap": p["params"]["dpi_cap"], "rate": p["params"].get("rate", 24)}
         else:
             spec = {"mode": "passthrough"}
         log.info("save start preset=%s spec=%s in=%s out=%s", pid, spec, self.path, out)

@@ -42,7 +42,9 @@ docs live in this dir (`DESIGN.md`, `DROPPED.md`, `DESIGNER_VERBATIM.md`, …).
 ## 3. Opinionated product rules (from the brief)
 - Max compression by default; single Effort knob (Max/Balanced/Fast) to trade speed.
 - BW: Otsu auto default, Simple (= GIMP Threshold) + Adaptive + Sauvola available,
-  global T slider + per-page override. Encode JBIG2 lossless, fallback CCITT G4.
+  global T slider + per-page override. Encode JBIG2 lossless (each page's
+  stream is test-decoded before embedding; 1-bit PNG where the decoder
+  can't take it).
   Lossy JBIG2 OFF by default (glyph-substitution risk).
 - Color: downsample 150dpi + JPEG q~50 default; JPEG2000 opt-in only.
 - NO JPEG XL inside PDFs (not in the spec, viewers can't open it).
@@ -60,8 +62,9 @@ docs live in this dir (`DESIGN.md`, `DROPPED.md`, `DESIGNER_VERBATIM.md`, …).
 - PCManFM DnD (`text/uri-list`) + Open button fallback; 1024×600-friendly.
 
 ## 5. Workflow
+- `./test.sh` (full `./.venv/bin/python -m pytest tests/ -q`) must stay green —
+  designer ruling §59: run the FULL suite every time, before every ship.
 - `python3 tools/check_env.py` then `./.venv/bin/python tools/check_env.py`.
-- `./.venv/bin/python -m pytest tests/ -q` must stay green.
 - Qt smoke: `QT_QPA_PLATFORM=offscreen ./.venv/bin/python -c "...MainWindow..."`.
 - Record per-test metrics (bytes in/out, % saved, secs, preset, viewer check).
 

@@ -437,6 +437,21 @@
 > filter details left side should have it, that is what I meant, this is obvious....
 > sorry, right side
 
+## 55 — wire the real saving (verbatim, 2026-10-10)
+> Also, why is proper saving not wired?? I said the size should NOT be estimate, but be the real amounts, why is this not done and why do you keep stopping before your work is completed?  Why are you not following my design rulings???
+
+## 56 — better JPEG (verbatim, 2026-10-10)
+> I also thought that there was a better jpeg compression algo that was widely supported, better than the default jpg, but of course, not as good as jpeg xl
+
+## 57 — JPX default + indexed colors (verbatim, 2026-10-10)
+> no jpeg as default, use the best compression tools.  Also, are there options to use jbig2 or similar with reduces colors index count.
+
+## 58 — dead Prev/Next (verbatim, 2026-10-10)
+> also, prev/next buttons seem to do nothing...
+
+## 59 — finish completely + full suite (verbatim, 2026-10-10)
+> please complete your work, don't stop half compelted.  Also make a full test suite please and run each time please.
+
 ## Corrections log (outside the quotes, for the record)
 - "JDIC2" → designer confirmed: JBIG2.
 - "jpg XL" → dropped per designer ("lok, no jxl"): JXL can't be embedded in PDFs today.

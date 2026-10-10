@@ -21,10 +21,10 @@ pip install -r requirements.txt  # into local ./.venv (PySide6, pymupdf, Pillow,
 ```
 - `PyMuPDF (fitz)` — open/render/replace images, `rewrite_images`, save with
   `garbage/deflate/use_objstms`. Version in trixie: 1.25.4 (good enough).
-- `Pillow` — JPEG encode, 1-bit PNG/G4 payloads, numpy↔QImage preview bridge.
+- `Pillow` — JPEG encode, 1-bit PNG payloads, numpy↔QImage preview bridge.
 - `numpy` — threshold math without OpenCV. OpenCV used only if present.
-- `jbig2enc` (external, `apt install jbig2enc` if available, else build) —
-  only BW encoder PyMuPDF can't do alone. Fallback is G4 via Pillow/MuPDF.
+- `jbig2` (external system package) — the BW encoder: per-page streams via
+  `jbig2 -p`, test-decoded before embedding, 1-bit PNG where undecodable.
 
 ## Module layout (actual)
 ```
@@ -59,7 +59,8 @@ pdf-minimalist/
 ```
 PDF page → fitz.get_pixmap(dpi=300) → numpy gray (0-255)
   → threshold(strategy, T) → 1-bit PIL image
-  → encode G4 or JBIG2 → replace page with single image xref
+  → encode JBIG2 (test-decoded; 1-bit PNG where undecodable)
+  → replace page with single image xref
   → save new PDF (garbage=4)
 ```
 Color mode:

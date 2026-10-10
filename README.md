@@ -5,6 +5,7 @@ Qt/PySide6 + PyMuPDF PDF optimizer. See `docs/00_OVERVIEW.md`.
 ## Run (all Python deps local in `./.venv`)
 ```bash
 ./setup_local.sh
+./test.sh              # FULL suite (ruling §59: green before every ship)
 ./run.sh [.tmp/demo.pdf] [--debug]   # UI + stdout log, tee'd to .tmp/pdf-minimalist.log
 # or:
 source .venv/bin/activate

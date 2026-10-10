@@ -287,10 +287,13 @@ item-40 rename, verified in `README.md` / `DEPENDENCIES.md` /
 `DEVELOPER_GUIDELINES.md`.
 See: `README.md`, `docs/DEPENDENCIES.md`, `docs/DEVELOPER_GUIDELINES.md`.
 
-## 42 — OPEN (full detail)
-Designer: push everything together, it doesn't matter for now, this is just a
-startup. Not yet done: single startup commit/push covering the rename +
-items 43–44 once green.
+## 42 — DONE
+~~push everything together, it doesn't matter for now, this is just a
+startup.~~
+Stub: single startup commit `0a9eeaf` pushed to `origin/main`
+(https://github.com/realcarbonneau/pdf-minimalist) covering the rename plus
+items 40–41 and 43–54; working tree clean and tracking. Item 39's remote
+check still stands.
 
 ## 43 — DONE
 ~~the progress bar is supposed to be for EACH filter.~~
@@ -356,6 +359,24 @@ See: `docs/DESIGN.md` (Behavior), `pdf_minimalist/ui_qt/jobs.py`
 (`mini_page_task`, `frame_view`, `FilterWorker`),
 `pdf_minimalist/ui_qt/app.py` (stores, `_reframe_minis`, `_dispatch_filters`).
 
+## 59 — DONE
+~~please complete your work, don't stop half compelted.  Also make a full test
+suite please and run each time please.~~
+Stub: finished in flight — color captions are real post-save amounts (saver
+and estimator share `color_stream_plan` with doc-wide dedupe; BW already
+real), `./test.sh` runs the full suite (README + dev-guidelines workflow
+updated), `./test.sh` green before this ship. Verified: 33/33 + offscreen.
+See: `test.sh`, `pdf_minimalist/core/pipeline.py` (`color_stream_plan`).
+
+## 58 — OPEN (full detail)
+Designer: Prev/Next buttons seem to do nothing. Found: `goto_page` scrolled
+by stride math, so in the autowrap grid any same-row target computed an
+identical scroll value (dead button), and scrolls snapped current back to the
+row's first page. Fixed: scroll the target item's scene position (exact for
+any grid/mixed sizes); same-row targets still become current. Verified: new
+grid walk test + 33/33 green. (Note: on a
+1-page doc the buttons are correctly inert.)
+
 ## 50 — DONE
 ~~the navigator section is useless, the original window is the navigator for
 now.~~
@@ -369,10 +390,73 @@ See: `pdf_minimalist/ui_qt/app.py`, `docs/DESIGN.md`.
 ~~filter details left side should have it [...] sorry, right side~~
 Stub: right panel gained a Filter details readout under Preset (threshold +
 T, render DPI/page-size/raster, encode line; JPEG q/cap for color; gc note
-for Original), refreshed on every control change. Also fixed latent bug: DPI /
-page-size / force-raster changes never dispatched (silently stale) — now they
-reprocess per §44. Verified offscreen + 27/27 green.
+for Original), refreshed on every control change. Correction: first version
+showed implementer jargon `1-bit PNG (JBIG2→G4 planned)` — the designer
+ruling (§3 brief + §4) is JBIG2 max compression, so the line now reads the
+ruled `JBIG2 · G4 fallback`. Correction 2: the designer never said G4
+fallback either (only JBIG2, §4, max compression §3 — verified by grep over
+`DESIGNER_VERBATIM.md`; the single G4 hit there is a corpus class, not a
+ruling). "G4 fallback" is implementer invention throughout (preset params,
+guidelines, design table). UI now reads the ruled `Encode: JBIG2` /
+`· JBIG2` with no fallback language. Standing gap (unchanged): Save embeds
+1-bit PNG today; the `jbig2` binary is present (`/usr/bin/jbig2`) but unwired
+— JBIG2 wiring is outstanding work, est sizes match today's PNG output.
+Also fixed latent bug: DPI / page-size / force-raster changes never
+dispatched (silently stale) — now they reprocess per §44. Verified offscreen
++ 27/27 green.
 See: `pdf_minimalist/ui_qt/app.py` (`_refresh_details`).
+
+## 56 — DONE
+~~I also thought that there was a better jpeg compression algo that was widely
+supported, better than the default jpg, but of course, not as good as jpeg
+xl~~
+Stub: JPEG 2000 — proven end-to-end here (Pillow encodes, PyMuPDF embeds
+JPXDecode, renders back) and wired as `Color · JPEG2000` (150dpi, rate 24),
+listed first among color presets: no JPEG default anymore. Save, preview,
+mini, est and details branches included. Bug found live post-ship: the new
+JPX mini path called the JPEG preview (throws for jpx) and the worker
+swallowed it — one eternal `need_mini=1`, 100% bar, idle CPU. Fixed the
+branch + worker failures now log warnings (no more silent stalls) + test
+asserts real composites for all 8. MozJPEG noted but not installed.
+Verified offscreen + 33/33 green.
+See: `pdf_minimalist/core/presets.py`, `pdf_minimalist/core/pipeline.py`
+(`jpx_encode`, `recompress_file` codec), `tests/test_pipeline.py`.
+
+## 57 — DONE
+~~no jpeg as default, use the best compression tools.  Also, are there options
+to use jbig2 or similar with reduces colors index count.~~
+Stub: (a) JPX ordered first = default color path, JPEG kept only as fallback
+options; (b) few-color images (≤256 distinct colors) get a lossless
+palette-quantized Flate candidate that wins whenever smallest — in every
+color preset, saver and estimator alike. Verified: FlateDecode picked on flat
+logo fixture + smaller file; 32/32 green.
+See: `pdf_minimalist/core/pipeline.py` (`indexed_flate_candidate`).
+
+## 56 — OPEN (full detail)
+Designer recalls a better-JPEG algo: widely supported, beats default JPG,
+below JXL. Verified on this box: (1) MozJPEG (better encoder, same format,
+universal) — NOT installed (libjpeg-turbo only); (2) JPEG 2000/JPX (better
+codec, in-spec, Acrobat/MuPDF/Evince/Chromium; ~20-30% over JPEG, slower) —
+proven end-to-end here (Pillow OpenJPEG encodes, PyMuPDF embeds as JPXDecode,
+renders back). Matches existing docs stance (JPX opt-in only). Not yet wired:
+needs a `Color · JPEG2000` preset + save/estimate branches + tests.
+
+## 55 — DONE
+~~Also, why is proper saving not wired?? I said the size should NOT be
+estimate, but be the real amounts, why is this not done and why do you keep
+stopping before your work is completed?  Why are you not following my design
+rulings???~~
+Stub: proper saving IS wired now — `process_file` embeds real JBIG2
+(`jbig2 -p` streams as JBIG2Decode XObjects) per your §3/§4 ruling, after I
+proved the route (pixel-exact roundtrip) and found + engineered around a real
+decoder limitation: small/sparse jbig2enc streams are valid JBIG2 (jbig2dec
+clean) but MuPDF cannot complete them (black fill) — every stream is
+test-decoded before embedding, failures take 1-bit PNG, per-page codecs
+logged at save. Estimator and saver share `bw_page_payload`, so BW captions
+are real embedded-byte sums (no `est.`); color stays estimated. 30/30 green
+incl. JBIG2 roundtrip, fallback-validity and pixel-exact tests.
+See: `pdf_minimalist/core/pipeline.py` (`bw_page_jbig2`, `jbig2_renders`,
+`_place_bw`, `process_file`), `tests/test_pipeline.py`.
 
 ## 53 — DONE
 ~~why don't I see the image algorithm?  is that imposed?  It should still be
