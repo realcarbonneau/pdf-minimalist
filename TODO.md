@@ -270,3 +270,148 @@ origin/main. Note: local package still named pdf_reducer (no rename ruled).
 See: https://github.com/realcarbonneau/pdf-minimalist (commit 78544a0).
 Remaining queue (not yet ruled on): JBIG2 wiring, software
 documentation example.
+
+## 40 — DONE
+~~change the various names and stubs that has pdf-reducer, to
+pdf-minimalist.~~
+Stub: `git mv pdf_reducer/ pdf_minimalist/` + all `from pdf_reducer`
+imports → `pdf_minimalist` (8 test files); display strings/docs already
+renamed; `run.sh` + `tools/shot.py` now resolve; `python -m pdf_minimalist`
+verified; 27/27 tests green. Historical `TODO.md` stubs keep old paths.
+See: `pdf_minimalist/`, `tests/`, `run.sh`, `tools/shot.py`.
+
+## 41 — DONE
+~~also, why does it say local? Ref: pdf-reducer (local)~~
+Stub: title → `pdf-minimalist`, `LOCAL` → repository-owned; part of the
+item-40 rename, verified in `README.md` / `DEPENDENCIES.md` /
+`DEVELOPER_GUIDELINES.md`.
+See: `README.md`, `docs/DEPENDENCIES.md`, `docs/DEVELOPER_GUIDELINES.md`.
+
+## 42 — OPEN (full detail)
+Designer: push everything together, it doesn't matter for now, this is just a
+startup. Not yet done: single startup commit/push covering the rename +
+items 43–44 once green.
+
+## 43 — DONE
+~~the progress bar is supposed to be for EACH filter.~~
+Stub: each strip mini now paints its own bar (`working…` 0.0 → mini 0.5 →
+`est. X` 1.0, bar hidden when done); status bar keeps only the aggregate.
+Verified by offscreen run (all 7 reach 1.0, icons non-null).
+See: `docs/DESIGN.md` (Behavior), `pdf_minimalist/ui_qt/app.py`
+(`_paint_strip_item`, `_filter_prog`), `pdf_minimalist/ui_qt/jobs.py`.
+
+## 44 — DONE
+~~when I was clicking on a filter preview, it seemed to be restarting it
+processing, but that is incorrect, it should be processed once and only
+reprocessed if there is a change of the file or change in the filter
+specifications.~~
+Stub: process-once cache — file identity (path+mtime+size) + top page +
+spec tuple (preset/mode/dpi/strategy/t); strip/preset clicks hit
+`_try_apply_cached` with no new job; `FilterWorker` takes
+`need_mini/need_est/need_preview` so partial misses only compute what's
+missing. Verified: cache-hit dispatch bumps no gen, same-row click no job,
+spec change reprocesses + grows cache 1→2; 27/27 tests green.
+See: `docs/DESIGN.md` (Behavior), `pdf_minimalist/ui_qt/app.py`
+(`_file_key`, `_dispatch_filters`, `_try_apply_cached`, `_preview_cache`),
+`pdf_minimalist/ui_qt/jobs.py`.
+
+## 45 — DONE (superseded by 48)
+~~Previews are truncated half page or something, when they should should the
+exact preview seen in the preview window.~~
+Stub: interim fix rendered minis full-page (killed the top-slice truncation,
+verified offscreen). Designer §48 then clarified the ruling: minis must mirror
+the main view's exact framing (multi-page grid included), each from its own
+filter's preprocessed file — implemented under item 48.
+See: `docs/DESIGN.md` (Behavior), item 48.
+
+## 46 — DONE
+~~Also, make the thumbnail preview box clear and the filter and size below it
+in smaller characters and aso clearly divided~~
+Stub: bordered preview frame + divider line + small caption (name dark, est
+gray) painted per mini; verified offscreen (`shot-main.png`).
+See: `pdf_minimalist/ui_qt/app.py` (`_paint_strip_item`).
+
+## 47 — DONE
+~~again, why is there reprocessing when I scroll????~~
+Stub: scroll/pan/zoom/page turns are pure view now — never a job. Cause was
+the single-page mini/est cache wiped on every top-page change; fixed by the
+item-48 redesign (per-preset full-document caches + reframe). Verified
+offscreen on a 6-page doc: page turn and scrollbar moves bump no generation,
+no job object.
+See: `pdf_minimalist/ui_qt/app.py` (`_reframe_minis`, `_on_page_changed`).
+
+## 48 — DONE
+~~Still wrong! Thumbnails should be a mini version of exactly the current view
+of the larger window. [...] each preview shows exactly that from it's own
+filter view (internal, no shown, file preprocessed in bg at the start or from
+the latest change).~~
+Stub: every preset × every page preprocessed once in background (mini-pages
+~200px + est sizes for all pages; 150dpi preview pages for the active spec);
+each mini composites exactly the synced main-view framing from its own
+preset's pages (`frame_view`); reframe on scroll with zero jobs; new jobs
+only on file/spec change; preview cache capped at 2 specs. Verified: 27/27
+tests green + offscreen 6-page check (framing aspect == main view, click
+dispatches exactly one preview-only job, click-back cached).
+See: `docs/DESIGN.md` (Behavior), `pdf_minimalist/ui_qt/jobs.py`
+(`mini_page_task`, `frame_view`, `FilterWorker`),
+`pdf_minimalist/ui_qt/app.py` (stores, `_reframe_minis`, `_dispatch_filters`).
+
+## 50 — DONE
+~~the navigator section is useless, the original window is the navigator for
+now.~~
+Stub: OverviewMap widget + label + `_refresh_nav`/`_nav_goto`/nav state
+deleted from the right panel; baseline pane is the navigator; view changes
+feed only the mini-reframe timer. `overview.py` module kept (covered by
+`test_overview_mirrors_view`). Verified offscreen + 27/27 green.
+See: `pdf_minimalist/ui_qt/app.py`, `docs/DESIGN.md`.
+
+## 54 — DONE
+~~filter details left side should have it [...] sorry, right side~~
+Stub: right panel gained a Filter details readout under Preset (threshold +
+T, render DPI/page-size/raster, encode line; JPEG q/cap for color; gc note
+for Original), refreshed on every control change. Also fixed latent bug: DPI /
+page-size / force-raster changes never dispatched (silently stale) — now they
+reprocess per §44. Verified offscreen + 27/27 green.
+See: `pdf_minimalist/ui_qt/app.py` (`_refresh_details`).
+
+## 53 — DONE
+~~why don't I see the image algorithm?  is that imposed?  It should still be
+shown in the filter details.  And is the size based on saving with this
+format?  And why estimated?  You should know the exact size of the file once
+processing is completed, no?~~
+Stub: nothing imposed it — caption space. Each mini now shows name, algorithm
+(`otsu · 300dpi · JBIG2`, `JPEG q45 · ≤150dpi`) and full-document payload
+estimate (all pages, real save settings, summed; container overhead unknowable
+till Save). Exact output size + saving reported after every save. Known
+limitation: BW save embeds 1-bit PNG today, JBIG2 wiring outstanding — est
+matches today's save output. Verified offscreen + 27/27 green.
+See: `docs/DESIGN.md`, `pdf_minimalist/ui_qt/app.py`
+(`_preset_algo`, `_reframe_one`, `_on_done`).
+
+## 52 — DONE
+~~what is the modern standard keypress for zoom in and zoom out, I tried and
+nothing worked.~~
+Stub: nothing was bound (only Ctrl+wheel zoomed). Added the modern standard:
+Ctrl+Plus in, Ctrl+Minus out, Ctrl+0 fit-width (`=` doubles as `+` on US
+layouts); applied to the synced panes. Verified offscreen (in/out/sync/reset)
++ 27/27 green.
+See: `pdf_minimalist/ui_qt/app.py` (`keyPressEvent`, `_keyboard_zoom`).
+
+## 51 — DONE
+~~WHen I open a new file, the right preview is the last to be updated, it
+should be always the first filter to be processed, ahead of all other
+priorities.  First open, it would be the first priority filter, but after, it
+would be whatever filter the user has selected, right?~~
+Stub: yes — priority target is always the active spec (default preset at
+first open, selected filter after). `FilterWorker` now renders the active
+filter's full preview pages before mini-pages and ests. Verified: emission
+order `preview, mini, mini, …` offscreen + 27/27 green.
+See: `pdf_minimalist/ui_qt/jobs.py` (`FilterWorker._run`).
+
+## 49 — OPEN (full detail)
+Designer: open-file window should show previews of the PDF files; asks if that
+needs a custom open-file control. Answer: yes — native dialogs cannot render
+PDF pages. Plan (not yet built): non-native dialog (Qt `DontUseNativeDialog`
++ preview pane, or bespoke `QDialog`): directory/file lists left, first-page
+thumbnail + page count + size right, rendered via PyMuPDF ~72dpi with an
+in-memory thumb cache; double-click opens.

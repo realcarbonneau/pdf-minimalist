@@ -6,9 +6,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import fitz  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from pdf_reducer.ui_qt.app import MainWindow  # noqa: E402
-from pdf_reducer.ui_qt.jobs import cpu_cap, estimate_bytes, mini_for_preset  # noqa: E402
-from pdf_reducer.ui_qt.jobs import render_gray  # noqa: E402
+from pdf_minimalist.ui_qt.app import MainWindow  # noqa: E402
+from pdf_minimalist.ui_qt.jobs import cpu_cap, estimate_bytes, mini_for_preset  # noqa: E402
+from pdf_minimalist.ui_qt.jobs import render_gray  # noqa: E402
 
 _app = QApplication.instance() or QApplication([])
 
@@ -49,7 +49,7 @@ def test_pure_job_helpers():
     assert cpu_cap() >= 1
     gray = render_gray("examples/images.pdf", 0, 150)
     assert gray.ndim == 2
-    from pdf_reducer.ui_qt.jobs import to_mini, crop_view
+    from pdf_minimalist.ui_qt.jobs import to_mini, crop_view
     mini = mini_for_preset(to_mini(crop_view(gray, None)), "bw-otsu")
     assert mini.shape == to_mini(gray).shape
     n = estimate_bytes("examples/images.pdf", 0, "bw-otsu", 300)
@@ -68,7 +68,7 @@ def test_preset_strip_sync_by_id():
     w.preset.setCurrentIndex(0)  # orig/passthrough: no strip row follows
     assert w.preset.itemData(0) == "orig"
     w._filterstrip_chosen(0)  # first mini -> bw-otsu preset
-    from pdf_reducer.core import presets
+    from pdf_minimalist.core import presets
     assert w.preset.itemData(w.preset.currentIndex()) == presets.PRESETS[1]["id"]
 
 

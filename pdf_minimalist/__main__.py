@@ -1,4 +1,4 @@
-"""Qt entry point: python -m pdf_reducer [input.pdf] [--debug]"""
+"""Qt entry point: python -m pdf_minimalist [input.pdf] [--debug]"""
 import os
 
 # Single-thread numerical backends FIRST (before numpy/BLAS load): background
@@ -12,7 +12,7 @@ from .ui_qt.app import main, setup_logging
 
 
 def cli(argv=None):
-    ap = argparse.ArgumentParser(prog="pdf_reducer")
+    ap = argparse.ArgumentParser(prog="pdf_minimalist")
     ap.add_argument("pdf", nargs="?", default=None)
     ap.add_argument("--debug", action="store_true",
                     help="verbose stdout diagnostics for run-and-review")

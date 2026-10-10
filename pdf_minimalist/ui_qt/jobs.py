@@ -30,6 +30,8 @@ from ..core.cancel import CancelToken
 
 PREVIEW_DPI = 150
 MINI_W = 160
+MINI_PAGE_W = 200  # per-preset mini-page width (§48): framing-exact, not quality-led
+MINI_PAGE_DPI = 72  # rendered small, then thumbnailed; the strip box is ~120px
 
 _pool = None
 
@@ -154,29 +156,111 @@ def preview_page(path: str, page: int, spec: dict) -> np.ndarray:
     return np.stack([out] * 3, axis=-1)  # RGB for a uniform pane path
 
 
-def mini_task(path: str, page: int, crop, pid: str) -> np.ndarray:
-    """Viewport mini for one preset. Runs in a pool process (must stay picklable)."""
-    gray = render_gray(path, page, PREVIEW_DPI)
-    return mini_for_preset(to_mini(crop_view(gray, crop)), pid)
+def mini_page_task(path: str, page: int, pid: str) -> np.ndarray:
+    """Small full-page render through one preset for mini compositing (§48).
+
+    Runs in a pool process (must stay picklable). Always RGB so the
+    framing composite has one code path; BW presets stack their 0/255 output.
+    """
+    p = presets.get(pid)
+    if p["mode"] == "bw":
+        from ..core import threshold as T
+        gray = render_gray(path, page, MINI_PAGE_DPI)
+        s, t = p["params"]["strategy"], p["params"]["t"]
+        fn = {"simple": lambda g: T.simple(g, t), "otsu": T.otsu,
+              "adaptive": T.adaptive_mean, "sauvola": T.sauvola}[s]
+        out = fn(gray)
+        rgb = np.stack([out] * 3, axis=-1)
+    else:
+        rgb = render_rgb(path, page, MINI_PAGE_DPI)
+        rgb = presets.apply_color_preview(rgb, pid)
+        rgb = np.asarray(rgb)
+    img = PILImage.fromarray(rgb)
+    w, h = img.size
+    if w > MINI_PAGE_W:
+        img = img.resize((MINI_PAGE_W, max(1, int(h * MINI_PAGE_W / w))), PILImage.LANCZOS)
+    return np.asarray(img)
+
+
+def frame_view(pages, pw: int, ph: int, gap: int, cols: int,
+               visible, out_w: int = 150) -> np.ndarray:
+    """Composite exactly the visible scene rect from per-preset mini-pages.
+
+    Pure function (§48): `pages` are small RGB arrays (index-aligned, None for
+    missing); `pw/ph` are the full-res base page dims the scene layout uses;
+    `visible` is (x, y, w, h) in scene coords. Returns an RGB thumbnail that
+    frames precisely what the main windows show — grid, gaps and cut-off last
+    page included. Missing pages stay white.
+    """
+    vx, vy, vw, vh = (float(v) for v in visible)
+    if vw <= 0 or vh <= 0:
+        return np.full((8, 8, 3), 255, dtype=np.uint8)
+    scale = out_w / vw
+    cw, ch = max(1, int(round(vw * scale))), max(1, int(round(vh * scale)))
+    canvas = np.full((ch, cw, 3), 255, dtype=np.uint8)
+    n = len(pages)
+    rows = (n + cols - 1) // cols if cols > 0 else 1
+    for idx, pg in enumerate(pages):
+        if pg is None:
+            continue
+        r, c = divmod(idx, max(1, cols))
+        ix, iy = c * (pw + gap), r * (ph + gap)
+        ox = max(ix, vx)
+        oy = max(iy, vy)
+        ox2 = min(ix + pw, vx + vw)
+        oy2 = min(iy + ph, vy + vh)
+        if ox2 <= ox or oy2 <= oy:
+            continue
+        H, W = pg.shape[:2]
+        sx, sy = (W / pw) if pw else 1.0, (H / ph) if ph else 1.0
+        px, py = int((ox - ix) * sx), int((oy - iy) * sy)
+        px2, py2 = int(np.ceil((ox2 - ix) * sx)), int(np.ceil((oy2 - iy) * sy))
+        px, py = max(0, px), max(0, py)
+        px2, py2 = min(W, max(px + 1, px2)), min(H, max(py + 1, py2))
+        if px2 <= px or py2 <= py:
+            continue
+        piece = pg[py:py2, px:px2]
+        dx, dy = int(round((ox - vx) * scale)), int(round((oy - vy) * scale))
+        dx2, dy2 = int(round((ox2 - vx) * scale)), int(round((oy2 - vy) * scale))
+        dx, dy = max(0, dx), max(0, dy)
+        dx2, dy2 = min(cw, max(dx + 1, dx2)), min(ch, max(dy + 1, dy2))
+        if dx2 <= dx or dy2 <= dy:
+            continue
+        thumb = PILImage.fromarray(piece).resize((dx2 - dx, dy2 - dy), PILImage.LANCZOS)
+        canvas[dy:dy2, dx:dx2] = np.asarray(thumb)
+    _ = rows  # layout rows implied by page count; kept for clarity
+    return canvas
 
 
 class FilterWorker(QThread):
-    """One background job: viewport minis -> est. sizes -> full preview pages.
+    """One background job: every preset × every page, once (§§37/44/48).
+
+    Phase 1 — full preview pages for the active filter (§51: the right pane
+    updates first). Phase 2 — mini-pages for exact-view compositing.
+    Phase 3 — est. sizes. Scrolling, panning, zooming and
+    page changes never dispatch: the GUI reframes minis from these caches.
 
     Signals carry the dispatch generation; the GUI applies only the latest.
     """
-    mini_done = Signal(str, object, int)   # pid, mini array, generation
-    est_done = Signal(str, str, int)       # pid, "est. X", generation
+    mini_done = Signal(str, int, object, int)  # pid, page, mini-page array, generation
+    est_done = Signal(str, int, int, int)      # pid, page, raw byte count, generation
     preview_done = Signal(object, int)     # [arrays...], generation
     progressed = Signal(int, int, int)     # done, total, generation
 
-    def __init__(self, path, page, crop, preset_ids, spec, token, generation):
+    def __init__(self, path, preset_ids, spec, token, generation, n_pages: int,
+                   need_mini=None, need_est=None, need_preview=True):
         super().__init__()
-        self.path, self.page, self.crop = path, page, crop
+        self.path = path
         self.preset_ids = list(preset_ids)
         self.spec = dict(spec)
         self.token = token
         self.generation = generation
+        self.n_pages = int(n_pages)
+        # §44 process-once: only compute what the GUI cache is missing.
+        # need_mini/need_est map pid -> sorted list of missing page indices.
+        self.need_mini = {pid: sorted(v) for pid, v in dict(need_mini or {}).items()}
+        self.need_est = {pid: sorted(v) for pid, v in dict(need_est or {}).items()}
+        self.need_preview = bool(need_preview)
 
     @staticmethod
     def fmt(n: int) -> str:
@@ -196,41 +280,15 @@ class FilterWorker(QThread):
         import concurrent.futures as cf
         ex = pool()
         dpi = self.spec.get("dpi", 300)
-        doc_n = self._page_count()
-        if doc_n is None:
-            return
-        n_pages = doc_n
-        # Phase 1 — viewport minis, one pool task per preset.
-        if self._alive():
-            futs = {ex.submit(mini_task, self.path, self.page, self.crop, pid): pid
-                    for pid in self.preset_ids}
-            for k, fut in enumerate(cf.as_completed(futs)):
-                if not self._alive():
-                    return
-                pid = futs[fut]
-                try:
-                    self.mini_done.emit(pid, fut.result(), self.generation)
-                except Exception:
-                    pass
-                self.progressed.emit(k + 1, len(self.preset_ids) * 2 + n_pages,
-                                     self.generation)
-        # Phase 2 — est. sizes, one pool task per preset.
-        if self._alive():
-            futs = {ex.submit(estimate_bytes, self.path, self.page, pid, dpi): pid
-                    for pid in self.preset_ids}
-            base = len(self.preset_ids)
-            for k, fut in enumerate(cf.as_completed(futs)):
-                if not self._alive():
-                    return
-                pid = futs[fut]
-                try:
-                    self.est_done.emit(pid, f"est. {self.fmt(fut.result())}", self.generation)
-                except Exception:
-                    pass
-                self.progressed.emit(base + k + 1, base + len(self.preset_ids) + n_pages,
-                                     self.generation)
-        # Phase 3 — full preview pages for the active preset, pooled per page.
-        if self._alive():
+        n_pages = self.n_pages
+        mini_tasks = sum(len(v) for v in self.need_mini.values())
+        est_tasks = sum(len(v) for v in self.need_est.values())
+        total = mini_tasks + est_tasks + (n_pages if self.need_preview else 0)
+        done = 0
+        # Phase 1 — full preview pages for the ACTIVE filter first (§51): the
+        # right pane is the designer's focus, so it updates before anything
+        # else. Pooled per page.
+        if self._alive() and self.need_preview:
             futs = {ex.submit(preview_page, self.path, i, self.spec): i
                     for i in range(n_pages)}
             pages = {}
@@ -241,19 +299,35 @@ class FilterWorker(QThread):
                     pages[futs[fut]] = fut.result()
                 except Exception:
                     pass
-                self.progressed.emit(len(self.preset_ids) * 2 + len(pages),
-                                     len(self.preset_ids) * 2 + n_pages, self.generation)
-            self.preview_done.emit([pages[i] for i in sorted(pages)], self.generation)
-
-    def _page_count(self):
-        import fitz
-        from ..core.pdf_io import FITZ_LOCK
-        try:
-            with FITZ_LOCK:
-                doc = fitz.open(self.path)
+                done += 1
+                self.progressed.emit(done, total, self.generation)
+            if len(pages) == n_pages:
+                self.preview_done.emit([pages[i] for i in sorted(pages)], self.generation)
+        # Phase 2 — mini-pages for exact-view compositing (§48).
+        if self._alive() and mini_tasks:
+            futs = {ex.submit(mini_page_task, self.path, i, pid): (pid, i)
+                    for pid, idxs in self.need_mini.items() for i in idxs}
+            for fut in cf.as_completed(futs):
+                if not self._alive():
+                    return
+                pid, i = futs[fut]
                 try:
-                    return doc.page_count
-                finally:
-                    doc.close()
-        except Exception:
-            return None
+                    self.mini_done.emit(pid, i, fut.result(), self.generation)
+                except Exception:
+                    pass
+                done += 1
+                self.progressed.emit(done, total, self.generation)
+        # Phase 3 — est. sizes for every preset and page.
+        if self._alive() and est_tasks:
+            futs = {ex.submit(estimate_bytes, self.path, i, pid, dpi): (pid, i)
+                    for pid, idxs in self.need_est.items() for i in idxs}
+            for fut in cf.as_completed(futs):
+                if not self._alive():
+                    return
+                pid, i = futs[fut]
+                try:
+                    self.est_done.emit(pid, i, int(fut.result()), self.generation)
+                except Exception:
+                    pass
+                done += 1
+                self.progressed.emit(done, total, self.generation)

@@ -95,7 +95,8 @@ class ContinuousDocView(QGraphicsView):
         self._syncing = False
         self._current = 0
         self.pageChanged = None  # callback(index): status + minis
-        self.changed = None  # callback(): any zoom/scroll/layout change (navigator)
+        self.changed = None  # callback(): any zoom/scroll/layout change (mini reframe)
+        self.relayouted = None  # callback(): grid reflowed (mini reframe, §48)
         self.verticalScrollBar().valueChanged.connect(self._on_vscroll)
         self.horizontalScrollBar().valueChanged.connect(lambda _v: self._push())
 
@@ -155,6 +156,8 @@ class ContinuousDocView(QGraphicsView):
         self.setSceneRect(0, 0, cols * (pw + self.GAP) - self.GAP,
                           rows * (ph + self.GAP) - self.GAP)
         self._notify_changed()
+        if self.relayouted is not None:
+            self.relayouted()
 
     def fit_width(self):
         if self._page_w():

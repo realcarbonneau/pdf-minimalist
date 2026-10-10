@@ -21,10 +21,10 @@ sudo apt install python3-venv jbig2 mupdf-tools poppler-utils
 sudo apt install python3-pyside6.qtcore python3-pyside6.qtgui python3-pyside6.qtwidgets python3-pymupdf
 ```
 
-## LOCAL — in `/home/user/Downloads/pdf-reducer/`, yours to keep
+## REPOSITORY-OWNED — in `/home/user/Downloads/pdf-minimalist/`
 | Path | What |
 |---|---|
-| `pdf_reducer/` | all app source (`core/` headless + `ui_qt/` GUI) |
+| `pdf_minimalist/` | all app source (`core/` headless + `ui_qt/` GUI) |
 | `tests/` | pytest suite + future fixtures in `tests/data/` |
 | `tools/check_env.py` | prints system-vs-local diagnostic |
 | `requirements.txt` | `pymupdf, PySide6-Essentials, Pillow, numpy` → installed into `.venv`, NOT system-wide |

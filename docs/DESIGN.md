@@ -23,6 +23,8 @@ Ruling §10 — raster defaults on main screen:
   - `View → Main: Side by side (H) | Stacked (V) | Single (toggle Orig/Preview)`
   - `View → Filters: Filmstrip (H) | Rail (V) | Grid`
   - Shortcuts: `Ctrl+1/2/3` main modes, `Ctrl+Shift+H/V/G` filter layout.
+  - Zoom keys (designer ruling §52, modern standard): `Ctrl+Plus` in,
+    `Ctrl+Minus` out, `Ctrl+0` fit-width. Panes stay synced either way.
   - Choice persists in QSettings.
 
 ```
@@ -49,7 +51,7 @@ View=Main:V + Filters:V (square / portrait screens) → panes stacked, rail on r
 | 6 | Color · Max Squeeze | color | 150dpi, JPEG q45 4:2:0 | smallest slides/photos |
 | 7 | Color · Balanced | color | 200dpi, JPEG q60 | readable photos, fewer blocks |
 
-Defined in code: `pdf_reducer/core/presets.py` → `PRESETS` (id, label, mode, params).
+Defined in code: `pdf_minimalist/core/presets.py` → `PRESETS` (id, label, mode, params).
 Thumbnails render lazily at ~96px on page change (debounced 150ms, cancellable);
 main preview re-renders at 150dpi on preset click (300dpi at Save).
 
@@ -69,12 +71,17 @@ main preview re-renders at 150dpi on preset click (300dpi at Save).
 - PgUp/PgDn jump to prev/next page top; click a filter mini still switches
   the right pane's filter (radio-behavior); minis render the current
   (top-visible) page.
-- Sizes under minis (designer ruling §32): each strip mini carries its
-  estimated final output size for the current page (`est 41KB`), computed with
-  the real encoders at save settings — not a mock number.
-- Navigator (designer ruling §32): a small preview of the original
-  (baseline) page with a rectangle mirroring the main view's current viewport;
-  click it to center the main view there.
+- Sizes under minis (designer ruling §32, honesty §53): each strip mini
+  carries its filter recipe (threshold strategy, DPI, encoder — `§53`) and
+  the FULL-document payload estimate (`est 41KB`): every page encoded with
+  the real save settings (BW threshold at save DPI, color JPEG at preset
+  quality) and summed. It stays an estimate — PDF container and gc/deflate
+  overhead are unknowable until Save — and the exact output size with the
+  saving is reported after every save.
+- Navigator dropped (designer ruling §50): the separate OverviewMap navigator
+  is gone — the original (left) window is the navigator. The right panel keeps
+  preset, strategy, threshold, DPI, page-size, force-raster, page buttons,
+  Save and Cancel; page/progress/status stay in the status bar.
 - One panel + menu (designer ruling §32): no left panel. File actions live in
   the menu; all working controls live in the single right panel; page/progress
   /status live in the status bar.
@@ -88,10 +95,29 @@ main preview re-renders at 150dpi on preset click (300dpi at Save).
   thread-workers all survive — only the full threaded path aborts), so threads
   are out for compute. Pan/zoom never re-renders: purely a view transform
   over already-rendered pixmaps.
-  Minis mirror the current viewport, not the whole page. Each processing
-  filter shows progress (minis fill in as each finishes + status-bar progress).
+- Thumbnails = exact mini of the main view (designer ruling §48, intent §32
+  + §37 + §45): each strip mini shows EXACTLY what the synced main windows
+  show — same pages, same grid, same scroll framing down to the cut-off last
+  page — but rendered through that mini's own filter from its internally
+  preprocessed file (built in background at start / latest change). Scroll,
+  pan and zoom are pure view changes: minis re-frame from cached per-preset
+  pages with zero background jobs (§47). A new job runs only on file change
+  or filter-spec change (§44).
+- Strip style (designer ruling §46): each mini sits in a clear bordered
+  preview box; a divider line separates it from the caption below, where the
+  filter name and est. size print in smaller characters.
   Stale jobs are abandoned by generation counter, never applied. Filter sort +
   max-auto-filters: deferred, explicitly later.
+- Per-filter progress (designer ruling §43): EACH strip filter shows its own
+  progress in place — `working…` → mini shown (50%) → `est. X` shown (100%).
+  The status-bar bar keeps only the aggregate job progress; it never replaces
+  the per-filter bars.
+- Process-once cache (designer ruling §44): a filter result is computed once
+  per (file identity + page + viewport crop + filter spec) and reused.
+  Clicking the strip or preset combo with an unchanged key switches panes
+  instantly with NO new background job. A new job runs only when the file
+  (path + mtime + size) or the spec (preset id/params, T/strategy, DPI,
+  page-size, force-raster) or the page/crop changes.
 - Per-page override (brief §3): page remembers its preset; empty = current global.
 - ESC cancels thumbnail batch + save job alike (<200ms, partial output deleted).
 - Born-digital warning: selecting a BW preset on a text-layer page shows the

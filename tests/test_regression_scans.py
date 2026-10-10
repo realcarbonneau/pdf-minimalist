@@ -9,9 +9,9 @@ import os
 import fitz  # noqa: E402
 import numpy as np  # noqa: E402
 
-from pdf_reducer.core import threshold as T  # noqa: E402
-from pdf_reducer.core.pipeline import process_file  # noqa: E402
-from pdf_reducer.core.cancel import CancelToken  # noqa: E402
+from pdf_minimalist.core import threshold as T  # noqa: E402
+from pdf_minimalist.core.pipeline import process_file  # noqa: E402
+from pdf_minimalist.core.cancel import CancelToken  # noqa: E402
 
 SCANS = sorted(glob.glob("examples/scan-*.pdf"))
 PAGES = {"scan-jfk-dark-letter.pdf": 6, "scan-jfk-ruled-list.pdf": 35,

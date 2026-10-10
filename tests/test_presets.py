@@ -1,4 +1,4 @@
-from pdf_reducer.core import presets
+from pdf_minimalist.core import presets
 
 
 def test_preset_ids_unique():

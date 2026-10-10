@@ -1,0 +1,1 @@
+"""pdf_minimalist package."""

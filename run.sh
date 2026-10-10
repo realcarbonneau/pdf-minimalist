@@ -7,4 +7,4 @@ mkdir -p .tmp
 if [ $# -eq 0 ]; then
   set -- examples/images.pdf
 fi
-./.venv/bin/python -m pdf_reducer "$@" 2>&1 | tee .tmp/pdf-reducer.log
+./.venv/bin/python -m pdf_minimalist "$@" 2>&1 | tee .tmp/pdf-minimalist.log

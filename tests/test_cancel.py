@@ -1,5 +1,5 @@
 import threading, time
-from pdf_reducer.core.cancel import CancelToken
+from pdf_minimalist.core.cancel import CancelToken
 
 
 def test_cancel_token_basic():

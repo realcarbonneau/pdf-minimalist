@@ -1,4 +1,4 @@
-# Developer guidelines — pdf-reducer (full)
+# Developer guidelines — pdf-minimalist (full)
 
 Read this before touching code. Source of truth for designer intent:
 `DESIGNER_VERBATIM.md`. Request tracker: `../TODO.md` (repo root).
@@ -34,7 +34,7 @@ docs live in this dir (`DESIGN.md`, `DROPPED.md`, `DESIGNER_VERBATIM.md`, …).
 ## 2. Stack & layout (locked unless the designer says otherwise)
 - Python + PySide6 (Qt6) GUI + PyMuPDF pipeline. `core/` = headless, NO Qt imports.
   `ui_qt/` = widgets only. Pure-numpy thresholds (no hard OpenCV dep).
-- LOCAL (this dir): `pdf_reducer/`, `tests/`, `tools/`, `docs/`,
+- REPOSITORY-OWNED: `pdf_minimalist/`, `tests/`, `tools/`, `docs/`,
   `requirements*.txt`, `.venv/` (git-ignored, via `setup_local.sh`).
 - SYSTEM (apt, never vendored): `python3`, `jbig2`, `mutool`, `pdfimages`,
   Qt6 C++ libs. Never `sudo pip install`; pip targets `./.venv` only.
@@ -69,7 +69,7 @@ docs live in this dir (`DESIGN.md`, `DROPPED.md`, `DESIGNER_VERBATIM.md`, …).
 - The app logs everything important to stdout: startup, open (path + page count),
   preset selection, preview renders (page/strategy/T/size), save params,
   job progress/completion, cancel requests, view-mode changes, warnings.
-- `--debug` (`python -m pdf_reducer --debug`) raises logging to DEBUG and dumps
+- `--debug` (`python -m pdf_minimalist --debug`) raises logging to DEBUG and dumps
   diagnostics: Python/PySide/Qt/fitz versions, cwd, argv, per-stage preview
   timings (render/threshold ms), per-page job progress.
 - Default (no flag) stays INFO: quiet enough to run, complete enough to review

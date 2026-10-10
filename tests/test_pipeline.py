@@ -2,8 +2,8 @@ import fitz
 import numpy as np
 from PIL import Image
 import io
-from pdf_reducer.core.pipeline import process_file, recompress_file, gc_copy, PAGE_SIZES
-from pdf_reducer.core.cancel import CancelToken
+from pdf_minimalist.core.pipeline import process_file, recompress_file, gc_copy, PAGE_SIZES
+from pdf_minimalist.core.cancel import CancelToken
 
 
 def _make_mixed(path: str):

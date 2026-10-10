@@ -1,7 +1,7 @@
 """pytest bootstrap: single-thread numerical backends before anything loads BLAS.
 
 Background QThread workers abort under BLAS thread-pool load in constrained
-environments (designer §37). Same guards live in pdf_reducer/__main__.py
+environments (designer §37). Same guards live in pdf_minimalist/__main__.py
 (app entry) and tools/shot.py.
 """
 import os

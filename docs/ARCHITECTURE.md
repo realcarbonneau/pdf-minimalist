@@ -9,7 +9,7 @@
 | PyGObject GTK3 | most native on LXDE | painful on Win/Mac | good | rejected (portability) |
 | Electron / Tauri | too heavy for old LXDE boxes | excellent | good | rejected |
 
-Qt is built directly (`pdf_reducer/ui_qt/`); there is no Tk code and no Tk-first
+Qt is built directly (`pdf_minimalist/ui_qt/`); there is no Tk code and no Tk-first
 staging step. Pipeline code in `core/` must never import Qt.
 
 ## Dependencies (Debian 13)
@@ -28,8 +28,8 @@ pip install -r requirements.txt  # into local ./.venv (PySide6, pymupdf, Pillow,
 
 ## Module layout (actual)
 ```
-pdf-reducer/
-  pdf_reducer/
+pdf-minimalist/
+  pdf_minimalist/
     core/             # headless, NO Qt imports
       cancel.py       # shared CancelToken (threading.Event + kill list)
       threshold.py    # simple / otsu / adaptive / sauvola, pure numpy
@@ -70,5 +70,5 @@ for each image xref: extract pix → downsample if >150dpi
 ```
 
 ## Packaging
-- v0.1: `python3 -m pdf_reducer` from source + `requirements.txt`.
+- v0.1: `python3 -m pdf_minimalist` from source + `requirements.txt`.
 - Later: `.deb`, AppImage, `pipx`, Windows exe via PyInstaller (same `core/`).

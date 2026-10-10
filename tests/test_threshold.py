@@ -1,5 +1,5 @@
 import numpy as np
-from pdf_reducer.core import threshold as T
+from pdf_minimalist.core import threshold as T
 
 
 def test_simple_gimp_equivalent():

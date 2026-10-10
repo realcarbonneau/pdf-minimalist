@@ -1,4 +1,4 @@
-# pdf-reducer — Overview & Opinionated Defaults
+# pdf-minimalist — Overview & Opinionated Defaults
 
 Target first: **LXDE on Debian 13 (trixie), Python 3.13**.
 Goal later: same codebase runs on Windows / macOS / other Linux.

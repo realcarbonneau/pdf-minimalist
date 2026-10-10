@@ -388,6 +388,55 @@
 >
 > My next priority would be a focused 12–16-page extreme-lighting test PDF using selected DocShadow-SD7K examples, followed by a SmartDoc handheld-photo PDF. Those two would probably reveal more about the quality of your future thresholding interface than another dozen clean government documents.
 
+## 39 — GitHub repository migration (verbatim, 2026-10-09)
+> I called my github repo, pdf-minimalist, I should already have ssh to github working locally, can you migrate and sync to github? There is only a placeholder readme there, everything can be replaced, but double check to make sure you have the correct repo.
+
+## 40 — product and stub rename (verbatim, 2026-10-09)
+> change the various names and stubs that has pdf-reducer, to pdf-minimalist.
+
+## 41 — stale local label (verbatim, 2026-10-09)
+> also, why does it say local? Ref: pdf-reducer (local)
+
+## 42 — startup commit scope (verbatim, 2026-10-09)
+> push everything together, it doesn't matter for now, this is just a startup.
+
+## 43 — per-filter progress (verbatim, 2026-10-10)
+> the progress bar is supposed to be for EACH filter.
+
+## 44 — process-once cache (verbatim, 2026-10-10)
+> when I was clicking on a filter preview, it seemed to be restarting it processing, but that is incorrect, it should be processed once and only reprocessed if there is a change of the file or change in the filter specifications.
+
+## 45 — full-page minis + process exit (verbatim, 2026-10-10)
+> Previews are truncated half page or something, when they should should the exact preview seen in the preview window, this was my previous design intent and ruling and you keep failing this.  Is it recorded?  Aso, why did the process close by itself??
+
+## 46 — strip caption style (verbatim, 2026-10-10)
+> Also, make the thumbnail preview box clear and the filter and size below it in smaller characters and aso clearly divided
+
+## 47 — scroll reprocessing (verbatim, 2026-10-10)
+> again, why is there reprocessing when I scroll????
+
+## 48 — thumbnail meaning, clarified (verbatim, 2026-10-10)
+> Still wrong! Thumbnails should be a mini version of exactly the current view of the larger window.  Why is this not clear?  If the original and preview windows (always synced view) show three pages wide and 4 pages high with the last page have cut, each preview shows exactly that from it's own filter view (internal, no shown, file preprocessed in bg at the start or from the latest change).  This seems simple and exacly derived from my previous rulings.
+
+## 49 — open dialog with previews (verbatim, 2026-10-10)
+> can we have an open file window that shows previews of the pdf files?  Does that require a custom open file control?
+
+## 50 — drop the navigator (verbatim, 2026-10-10)
+> the navigator section is useless, the original window is the navigator for now.
+
+## 51 — preview-first priority (verbatim, 2026-10-10)
+> WHen I open a new file, the right preview is the last to be updated, it should be always the first filter to be processed, ahead of all other priorities.  First open, it would be the first priority filter, but after, it would be whatever filter the user has selected, right?
+
+## 52 — keyboard zoom (verbatim, 2026-10-10)
+> what is the modern standard keypress for zoom in and zoom out, I tried and nothing worked.
+
+## 53 — algorithm + size honesty (verbatim, 2026-10-10)
+> why don't I see the image algorithm?  is that imposed?  It should still be shown in the filter details.  And is the size based on saving with this format?  And why estimated?  You should know the exact size of the file once processing is completed, no?
+
+## 54 — details on the right (verbatim, 2026-10-10)
+> filter details left side should have it, that is what I meant, this is obvious....
+> sorry, right side
+
 ## Corrections log (outside the quotes, for the record)
 - "JDIC2" → designer confirmed: JBIG2.
 - "jpg XL" → dropped per designer ("lok, no jxl"): JXL can't be embedded in PDFs today.

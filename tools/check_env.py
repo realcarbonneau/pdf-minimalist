@@ -4,7 +4,7 @@ import shutil
 import sys
 
 print(f"python: {sys.version.split()[0]}  exe={sys.executable}")
-print(f"prefix: {sys.prefix}  (local .venv if path contains pdf-reducer/.venv)")
+print(f"prefix: {sys.prefix}  (project .venv if path contains pdf-minimalist/.venv)")
 print()
 for mod, pkg in [("fitz", "pymupdf"), ("PySide6", "PySide6-Essentials"),
                  ("PIL", "Pillow"), ("numpy", "numpy")]:

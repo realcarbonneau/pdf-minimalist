@@ -6,8 +6,8 @@ from PySide6.QtGui import QImage  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 from PySide6.QtCore import Qt  # noqa: E402
 
-from pdf_reducer.ui_qt.viewer import ContinuousDocView  # noqa: E402
-from pdf_reducer.ui_qt.overview import OverviewMap  # noqa: E402
+from pdf_minimalist.ui_qt.viewer import ContinuousDocView  # noqa: E402
+from pdf_minimalist.ui_qt.overview import OverviewMap  # noqa: E402
 
 _app = QApplication.instance() or QApplication([])
 

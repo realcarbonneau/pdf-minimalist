@@ -15,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
-from pdf_reducer.ui_qt.app import MainWindow, setup_logging  # noqa: E402
+from pdf_minimalist.ui_qt.app import MainWindow, setup_logging  # noqa: E402
 
 
 def wait_job(w, timeout=120):
